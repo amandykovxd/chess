@@ -25,6 +25,8 @@ let requestSeq = Math.floor(Date.now() % 1e6);
 /** Последнее состояние по вкладке. Теряется при выгрузке SW — восстанавливается запросом снимка. */
 const tabs = new Map();
 let engineStatus = { state: 'idle' };
+/** Идёт ли сейчас поиск — нужно, чтобы панель знала, что можно останавливать. */
+let searching = false;
 
 // ---------------------------------------------------------------- установка
 
@@ -235,9 +237,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       return true;
 
     case MSG.STOP_ANALYSIS:
-      sendToOffscreen(MSG.ENGINE_STOP, {}).catch(() => {});
-      sendResponse({ ok: true });
-      return false;
+      pauseAnalysis().then(
+        () => sendResponse({ ok: true }),
+        (err) => sendResponse({ ok: false, error: String(err?.message || err) }),
+      );
+      return true;
 
     // --- из offscreen ---
     case MSG.ENGINE_STATUS:
@@ -308,6 +312,10 @@ async function onBoardUpdate(tabId, payload) {
 
   pushState();
   const settings = await getSettings();
+  if (settings.paused) {
+    await clearArrows(tabId);
+    return;
+  }
   if (!settings.autoAnalyze && !payload.force) return;
   if (!shouldAnalyzeTurn(payload.snapshot?.turnHint, settings.analyzeFor)) {
     await clearArrows(tabId);
@@ -327,6 +335,8 @@ async function startAnalysis(tabId, overrides = {}) {
   const settings = await getSettings();
   const requestId = ++requestSeq;
   tabs.set(tabId, { ...tab, requestId, error: null });
+  searching = true;
+  pushState();
 
   await sendToOffscreen(MSG.ENGINE_ANALYZE, {
     requestId,
@@ -339,6 +349,8 @@ async function startAnalysis(tabId, overrides = {}) {
 }
 
 async function analyzeActiveTab({ force = false } = {}) {
+  const settings = await getSettings();
+  if (settings.paused) await patchSettings({ paused: false });
   const tabId = await activeTabId();
   if (tabId == null) throw new Error('Нет активной вкладки.');
   const tab = tabs.get(tabId);
@@ -355,7 +367,19 @@ async function analyzeFen(fen) {
   const settings = await getSettings();
   const requestId = ++requestSeq;
   if (tabId != null) ensureTab(tabId, { requestId, error: null });
+  searching = true;
+  pushState();
   await sendToOffscreen(MSG.ENGINE_ANALYZE, { requestId, tabId, snapshot: null, fen: fen.trim(), settings });
+}
+
+/** «Стоп»: обрываем поиск, убираем стрелки и встаём на паузу до «Продолжить». */
+async function pauseAnalysis() {
+  searching = false;
+  await patchSettings({ paused: true });
+  sendToOffscreen(MSG.ENGINE_STOP, {}).catch(() => {});
+  const tabId = await activeTabId();
+  if (tabId != null) await clearArrows(tabId);
+  pushState();
 }
 
 async function onPatchSettings(rawPatch) {
@@ -365,8 +389,8 @@ async function onPatchSettings(rawPatch) {
   if (tabId != null) {
     const tab = tabs.get(tabId);
     // Изменение силы / времени / числа вариантов требует пересчёта.
-    const needsRecount = ['elo', 'movetimeMs', 'multipv', 'compareBest'].some((k) => k in patch);
-    if (!settings.showArrows) await clearArrows(tabId);
+    const needsRecount = ['elo', 'movetimeMs', 'multipv', 'compareBest', 'paused'].some((k) => k in patch);
+    if (!settings.showArrows || settings.paused) await clearArrows(tabId);
     else if (needsRecount && tab?.snapshot && settings.autoAnalyze) await startAnalysis(tabId);
     else if (tab?.result) await drawFromResult(tabId, tab.result, settings);
   }
@@ -401,8 +425,11 @@ async function onEngineOutput(type, payload) {
 
   const settings = await getSettings();
   const final = type === MSG.ENGINE_RESULT;
+  if (final) searching = false;
 
-  if (tabId != null && settings.showArrows) {
+  // На паузе стрелки не возвращаем: результат уже запущенного поиска
+  // приходит через мгновение после «Стоп» и иначе перерисовал бы их заново.
+  if (tabId != null && settings.showArrows && !settings.paused) {
     // Промежуточные варианты рисуем тоже — стрелка «догоняет» мысль движка.
     await drawFromResult(tabId, payload, settings);
   }
@@ -410,6 +437,7 @@ async function onEngineOutput(type, payload) {
 }
 
 function onEngineError(payload) {
+  searching = false;
   const tabId = payload?.tabId;
   if (tabId != null) {
     tabs.set(tabId, { ...(tabs.get(tabId) || { tabId }), error: payload.error, result: null });
@@ -482,6 +510,7 @@ async function buildState(settings) {
   const tab = tabId != null ? tabs.get(tabId) : null;
   return {
     engine: engineStatus,
+    searching,
     settings: settings || (await getSettings()),
     tabId,
     // url приходит только для вкладок, покрытых host_permissions, —

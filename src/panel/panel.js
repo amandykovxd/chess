@@ -146,13 +146,16 @@ for (const key of ['autoAnalyze', 'showArrows', 'compareBest']) {
 }
 
 els.analyzeBtn.addEventListener('click', async () => {
-  els.analyzeBtn.disabled = true;
   const res = await send(MSG.REQUEST_ANALYSIS, {});
-  els.analyzeBtn.disabled = false;
   if (res && res.ok === false) showNotes([{ text: res.error, kind: 'error' }]);
 });
 
-els.stopBtn.addEventListener('click', () => send(MSG.STOP_ANALYSIS, {}));
+els.stopBtn.addEventListener('click', () => {
+  // Одна кнопка на два состояния: «Стоп» ставит подсказки на паузу,
+  // «Продолжить» снимает её и сразу пересчитывает позицию.
+  if (settings.paused) patch('paused', false, 0);
+  else send(MSG.STOP_ANALYSIS, {});
+});
 
 els.turnSwitch.addEventListener('click', (e) => {
   const btn = e.target.closest('button[data-turn]');
@@ -203,6 +206,11 @@ function applySettings(next) {
   els.autoAnalyze.checked = settings.autoAnalyze;
   els.showArrows.checked = settings.showArrows;
   els.compareBest.checked = settings.compareBest;
+
+  els.stopBtn.textContent = settings.paused ? 'Продолжить' : 'Стоп';
+  // Зелёной делаем ту кнопку, которая сейчас по делу.
+  els.stopBtn.classList.toggle('primary', settings.paused);
+  els.analyzeBtn.classList.toggle('primary', !settings.paused);
 }
 
 function applyEngine(engine) {
@@ -233,8 +241,14 @@ function render(state) {
   if (state.settings) applySettings(state.settings);
   applyEngine(state.engine);
 
+  els.analyzeBtn.textContent = state.searching ? 'Считает…' : 'Посчитать';
+
   const notes = [];
   const result = state.result;
+
+  if (settings.paused) {
+    notes.push({ text: 'Подсказки на паузе: стрелки убраны, ходы не считаются. Нажмите «Продолжить».', kind: 'info' });
+  }
 
   if (!state.hasBoard && !result) {
     let text;

@@ -18,6 +18,8 @@ let eloLimits = { ...FALLBACK_LIMITS };
 let currentRequestId = 0;
 /** Чаще этого промежуточные варианты наружу не отдаём. */
 const PARTIAL_THROTTLE_MS = 150;
+/** Запрос, который пользователь оборвал кнопкой «Стоп». */
+let stoppedRequestId = 0;
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.target !== 'offscreen') return undefined;
@@ -41,7 +43,11 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       return true;
 
     case MSG.ENGINE_STOP:
-      currentRequestId++;
+      // По UCI команда stop обрывает поиск и заставляет движок немедленно
+      // назвать лучший ход из уже просчитанного. Поэтому запрос не
+      // аннулируем — иначе готовый результат был бы выброшен и панель
+      // так и осталась бы в состоянии «считает».
+      stoppedRequestId = currentRequestId;
       try { engine?.post('stop'); } catch { /* движок мог ещё не запуститься */ }
       sendResponse({ ok: true });
       return false;
@@ -158,8 +164,10 @@ async function handleAnalyze(payload) {
 
   // При ограниченной силе движок намеренно играет не лучший ход.
   // По желанию считаем ещё и объективно сильнейший — для сравнения.
+  const stopped = requestId === stoppedRequestId;
+
   let maxBest = null;
-  if (settings.compareBest && plan.mode !== 'max') {
+  if (settings.compareBest && plan.mode !== 'max' && !stopped) {
     const fullPlan = strengthPlan(3200, eloLimits);
     const full = await sf.request({
       fen: resolved.fen,
@@ -183,6 +191,7 @@ async function handleAnalyze(payload) {
     maxBest,
     sameAsBest: Boolean(maxBest && best && maxBest.uci === best.uci),
     meta: search.meta,
+    stopped,
     plan: { mode: plan.mode, note: plan.note, approxElo: plan.approxElo },
     engineId: sf.id,
     limits: eloLimits,
