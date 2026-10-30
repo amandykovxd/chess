@@ -1,0 +1,63 @@
+{
+  "manifest_version": 3,
+  "name": "Chess Coach — подсказки Stockfish",
+  "short_name": "Chess Coach",
+  "version": "1.0.0",
+  "description": "Анализ шахматных позиций движком Stockfish с выбором силы игры (рейтинг Эло). Показывает лучшие ходы стрелками на доске.",
+  "minimum_chrome_version": "116",
+
+  "permissions": ["offscreen", "storage", "sidePanel"],
+
+  "host_permissions": [
+    "https://www.chess.com/*",
+    "https://lichess.org/*"
+  ],
+
+  "background": {
+    "service_worker": "src/background/service-worker.js",
+    "type": "module"
+  },
+
+  "action": {
+    "default_title": "Chess Coach — открыть панель анализа",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+
+  "side_panel": {
+    "default_path": "src/panel/panel.html"
+  },
+
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.chess.com/*",
+        "https://lichess.org/*"
+      ],
+      "js": [
+        "src/common/protocol.js",
+        "src/content/adapters.js",
+        "src/content/overlay.js",
+        "src/content/content.js"
+      ],
+      "css": ["src/content/overlay.css"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; worker-src 'self'"
+  }
+}

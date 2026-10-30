@@ -1,0 +1,15 @@
+{
+  "name": "chess-coach-extension",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Chrome-расширение: подсказки Stockfish с выбираемой силой игры на chess.com и lichess.org",
+  "license": "GPL-3.0-or-later",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "pack": "rm -rf dist && mkdir -p dist && zip -qr dist/chess-coach.zip manifest.json icons src licenses LICENSE -x '*.map' '*.DS_Store' && echo dist/chess-coach.zip"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

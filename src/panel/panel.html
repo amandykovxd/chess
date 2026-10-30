@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Chess Coach</title>
+    <link rel="stylesheet" href="panel.css" />
+  </head>
+  <body>
+    <header class="top">
+      <div class="top-title">
+        <span class="dot" id="statusDot" data-state="idle"></span>
+        <strong>Chess Coach</strong>
+      </div>
+      <div class="top-meta" id="engineLine">движок загружается…</div>
+    </header>
+
+    <main>
+      <!-- ───────────────────────── сила движка ───────────────────────── -->
+      <section class="card">
+        <div class="row row-between">
+          <h2>Сила движка</h2>
+          <output class="elo-value" id="eloValue">1600</output>
+        </div>
+        <input
+          type="range"
+          id="eloSlider"
+          min="500"
+          max="3200"
+          step="50"
+          value="1600"
+          aria-label="Целевой рейтинг движка в очках Эло"
+        />
+        <div class="scale">
+          <span>500</span><span>1600</span><span>МАКС</span>
+        </div>
+        <div class="chips" id="presets"></div>
+        <p class="hint" id="planHint"></p>
+      </section>
+
+      <!-- ──────────────────────── лучший ход ────────────────────────── -->
+      <section class="card">
+        <div class="row row-between">
+          <h2>Рекомендация</h2>
+          <span class="badge" id="turnBadge">—</span>
+        </div>
+
+        <div class="evalbar" title="Перевес по оценке движка">
+          <div class="evalbar-fill" id="evalFill"></div>
+          <span class="evalbar-text" id="evalText">—</span>
+        </div>
+
+        <div class="best">
+          <div class="best-move" id="bestMove">—</div>
+          <div class="best-sub" id="bestSub">нет данных</div>
+        </div>
+
+        <ul class="lines" id="lines"></ul>
+
+        <div class="row row-gap">
+          <button type="button" id="analyzeBtn" class="primary">Посчитать</button>
+          <button type="button" id="stopBtn">Стоп</button>
+        </div>
+        <p class="hint" id="searchMeta"></p>
+      </section>
+
+      <!-- ───────────────────────── настройки ────────────────────────── -->
+      <section class="card">
+        <h2>Настройки</h2>
+
+        <label class="field">
+          <span class="field-label">Время на ход <output id="movetimeValue">1.0 с</output></span>
+          <input type="range" id="movetime" min="100" max="8000" step="100" value="1000" />
+        </label>
+
+        <label class="field">
+          <span class="field-label">Вариантов считать <output id="multipvValue">3</output></span>
+          <input type="range" id="multipv" min="1" max="5" step="1" value="3" />
+        </label>
+
+        <label class="field">
+          <span class="field-label">Стрелок на доске <output id="arrowCountValue">2</output></span>
+          <input type="range" id="arrowCount" min="1" max="5" step="1" value="2" />
+        </label>
+
+        <label class="field">
+          <span class="field-label">Подсказывать за</span>
+          <select id="analyzeFor">
+            <option value="both">любую сторону</option>
+            <option value="white">белых</option>
+            <option value="black">чёрных</option>
+          </select>
+        </label>
+
+        <label class="check">
+          <input type="checkbox" id="autoAnalyze" checked />
+          <span>Считать автоматически при каждом ходе</span>
+        </label>
+        <label class="check">
+          <input type="checkbox" id="showArrows" checked />
+          <span>Рисовать стрелки поверх доски</span>
+        </label>
+        <label class="check">
+          <input type="checkbox" id="compareBest" />
+          <span>Показывать и объективно лучший ход</span>
+        </label>
+      </section>
+
+      <!-- ────────────────────────── позиция ────────────────────────── -->
+      <section class="card">
+        <div class="row row-between">
+          <h2>Позиция</h2>
+          <span class="badge" id="sourceBadge">—</span>
+        </div>
+
+        <div class="row row-gap">
+          <span class="field-label">Ход:</span>
+          <div class="segmented" id="turnSwitch">
+            <button type="button" data-turn="auto" class="on">авто</button>
+            <button type="button" data-turn="w">белых</button>
+            <button type="button" data-turn="b">чёрных</button>
+          </div>
+        </div>
+
+        <textarea id="fenBox" rows="3" spellcheck="false" aria-label="FEN позиции"></textarea>
+        <div class="row row-gap">
+          <button type="button" id="fenAnalyzeBtn">Анализировать этот FEN</button>
+          <button type="button" id="fenCopyBtn">Копировать</button>
+        </div>
+
+        <ul class="notes" id="notes"></ul>
+      </section>
+
+      <p class="disclaimer">
+        Инструмент для разбора позиций и тренировки. Подсказки в идущей рейтинговой
+        партии нарушают правила честной игры chess.com и lichess.
+      </p>
+    </main>
+
+    <script type="module" src="panel.js"></script>
+  </body>
+</html>

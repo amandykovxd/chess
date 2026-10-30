@@ -1,0 +1,15 @@
+/* Контейнер стрелок: фиксирован в окне и подгоняется под доску из JS. */
+.cc-overlay-root {
+  position: fixed;
+  z-index: 2147483000;
+  pointer-events: none;
+  display: none;
+  contain: layout style size;
+}
+
+.cc-overlay-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}

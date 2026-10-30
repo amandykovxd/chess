@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <title>Chess Coach — движок</title>
+  </head>
+  <body>
+    <!--
+      Невидимая страница. Нужна только чтобы держать Stockfish в Web Worker:
+      service worker в Manifest V3 выгружается через считанные секунды простоя
+      и для долгого поиска не годится.
+    -->
+    <script type="module" src="offscreen.js"></script>
+  </body>
+</html>
