@@ -58,9 +58,24 @@ body {
 }
 
 .top-meta {
+  display: block;
   margin-top: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
   color: var(--ink-dim);
+  font: inherit;
   font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+.top-meta:hover {
+  color: var(--ink);
+  text-decoration: underline;
+}
+.top-meta[data-state="error"] {
+  color: var(--danger);
 }
 
 .dot {

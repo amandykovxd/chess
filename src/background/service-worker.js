@@ -116,13 +116,64 @@ async function ensureOffscreen() {
   }
 }
 
-async function warmUpEngine() {
+/**
+ * Поднимает движок и запоминает его состояние.
+ *
+ * Статус движка нельзя держать только на broadcast'ах: service worker
+ * выгружается и теряет память, а offscreen-документ продолжает жить и
+ * ничего повторно не присылает. Поэтому состояние всегда перезапрашиваем
+ * ответом на ENGINE_START — для уже готового движка это дешёвый вызов.
+ */
+async function warmUpEngine({ notify = true } = {}) {
   try {
     await ensureOffscreen();
-    await sendToOffscreen(MSG.ENGINE_START, {});
+    const res = await sendWithRetry(MSG.ENGINE_START, {});
+    if (res?.ok) {
+      engineStatus = { state: 'ready', engineId: res.engineId, limits: res.limits };
+    } else {
+      engineStatus = { state: 'error', message: res?.error || 'движок не ответил' };
+    }
   } catch (err) {
+    engineStatus = { state: 'error', message: String(err?.message || err) };
     console.warn('[sw] движок не прогрелся', err);
   }
+  if (notify) pushState();
+  return engineStatus;
+}
+
+/**
+ * Сразу после createDocument страница ещё не успела повесить обработчик
+ * сообщений, и первый же вызов падает с «Could not establish connection».
+ */
+async function sendWithRetry(type, payload, attempts = 4) {
+  let lastError = null;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await chrome.runtime.sendMessage({ target: 'offscreen', type, payload });
+    } catch (err) {
+      lastError = err;
+      if (!/establish connection|Receiving end does not exist/i.test(String(err?.message))) throw err;
+      await delay(150 * (i + 1));
+    }
+  }
+  throw lastError;
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Полный перезапуск: закрываем offscreen-документ и поднимаем движок заново. */
+async function restartEngine() {
+  offscreenReady = null;
+  engineStatus = { state: 'loading', message: 'перезапуск…' };
+  pushState();
+  try {
+    await chrome.offscreen.closeDocument();
+  } catch {
+    // Документа могло и не быть — это нормально.
+  }
+  return warmUpEngine();
 }
 
 async function sendToOffscreen(type, payload) {
@@ -172,6 +223,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     case MSG.OVERRIDE_TURN:
       onOverrideTurn(msg.payload?.turn).then(
         () => sendResponse({ ok: true }),
+        (err) => sendResponse({ ok: false, error: String(err?.message || err) }),
+      );
+      return true;
+
+    case MSG.RESTART_ENGINE:
+      restartEngine().then(
+        (status) => sendResponse({ ok: status.state === 'ready', status }),
         (err) => sendResponse({ ok: false, error: String(err?.message || err) }),
       );
       return true;
@@ -328,7 +386,8 @@ async function onPanelReady() {
   const settings = await getSettings();
   const tabId = await activeTabId();
   refreshSnapshot(tabId);
-  warmUpEngine();
+  // Ждём статус движка: иначе панель откроется с «не запущен» и так и застрянет.
+  await warmUpEngine({ notify: false });
   return { ok: true, state: await buildState(settings) };
 }
 
@@ -418,12 +477,16 @@ async function clearArrows(tabId) {
 // ---------------------------------------------------------------- панель
 
 async function buildState(settings) {
-  const tabId = await activeTabId();
+  const [activeTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  const tabId = activeTab?.id ?? null;
   const tab = tabId != null ? tabs.get(tabId) : null;
   return {
     engine: engineStatus,
     settings: settings || (await getSettings()),
     tabId,
+    // url приходит только для вкладок, покрытых host_permissions, —
+    // то есть его наличие и означает «сайт поддерживается».
+    supportedSite: Boolean(activeTab?.url),
     site: tab?.site || null,
     hasBoard: Boolean(tab?.snapshot),
     snapshotInfo: tab?.snapshot

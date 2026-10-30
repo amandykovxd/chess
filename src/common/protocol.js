@@ -18,6 +18,7 @@ globalThis.CC = Object.freeze({
     ANALYZE_FEN: 'cc:analyze-fen',
     STOP_ANALYSIS: 'cc:stop-analysis',
     OVERRIDE_TURN: 'cc:override-turn',
+    RESTART_ENGINE: 'cc:restart-engine',
 
     // service worker -> offscreen
     ENGINE_START: 'cc:engine-start',

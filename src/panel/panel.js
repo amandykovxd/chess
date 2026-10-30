@@ -208,17 +208,26 @@ function applySettings(next) {
 function applyEngine(engine) {
   const state = engine?.state || 'idle';
   els.statusDot.dataset.state = state;
+  els.engineLine.dataset.state = state;
   if (engine?.limits) {
     limits = engine.limits;
     if (!dragging) renderStrength(Number(els.eloSlider.value));
   }
   els.engineLine.textContent = {
-    idle: 'движок не запущен',
+    idle: 'движок не запущен — нажмите, чтобы запустить',
     loading: engine?.message || 'движок загружается…',
     ready: `${engine?.engineId || 'Stockfish'} · Эло ${limits.eloMin}–${limits.eloMax}`,
-    error: `ошибка движка: ${engine?.message || 'неизвестно'}`,
+    error: `${engine?.message || 'движок не запустился'} — нажмите, чтобы перезапустить`,
   }[state];
 }
+
+els.engineLine.addEventListener('click', async () => {
+  els.engineLine.textContent = 'перезапуск движка…';
+  els.statusDot.dataset.state = 'loading';
+  const res = await send(MSG.RESTART_ENGINE, {});
+  if (res?.status) applyEngine(res.status);
+  else if (res?.error) applyEngine({ state: 'error', message: res.error });
+});
 
 function render(state) {
   if (state.settings) applySettings(state.settings);
@@ -228,12 +237,16 @@ function render(state) {
   const result = state.result;
 
   if (!state.hasBoard && !result) {
-    notes.push({
-      text: state.site
-        ? 'Доска на странице не найдена. Откройте партию, задачу или анализ.'
-        : 'Откройте chess.com или lichess.org — там расширение подхватит доску.',
-      kind: 'info',
-    });
+    let text;
+    if (!state.supportedSite) {
+      text = 'Текущая вкладка — не chess.com и не lichess.org. Откройте партию или задачу на одном из этих сайтов.';
+    } else if (!state.site) {
+      // Chrome не внедряет content script в уже открытые вкладки при установке расширения.
+      text = 'Сайт поддерживается, но скрипт в страницу не внедрён. Обновите вкладку (F5) — после установки расширения это нужно сделать один раз.';
+    } else {
+      text = 'Доска на странице не найдена. Откройте партию, задачу или анализ — на главной странице доски нет.';
+    }
+    notes.push({ text, kind: 'info' });
   }
   if (state.error) notes.push({ text: state.error, kind: 'error' });
 
